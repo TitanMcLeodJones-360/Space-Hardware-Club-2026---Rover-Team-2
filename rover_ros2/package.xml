@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>rover_control</name>
+  <version>0.3.0</version>
+  <description>Rover arm controls and ground station</description>
+  <maintainer email="rover@example.invalid">Rover Software Team</maintainer>
+  <license>Proprietary</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <depend>rover_interfaces</depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>python3-pyqt5</exec_depend>
+  <exec_depend>python3-pyqtgraph</exec_depend>
+  <exec_depend>python3-serial</exec_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>
