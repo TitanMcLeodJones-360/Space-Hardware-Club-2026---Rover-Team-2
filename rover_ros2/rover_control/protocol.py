@@ -1,5 +1,5 @@
 # Shared command and sensor messages.
-AXES = ("Base", "Shoulder", "Elbow", "Wrist", "Gripper")
+AXES = ("Axis1", "Axis2", "Axis3A", "Axis3B")
 CONTROL_COMMANDS = ("ARM_ENABLE", "STOP_ALL", "HEARTBEAT", "STATUS", "LINK_LOST")
 SENSOR_FIELDS = ("temperature", "pressure", "accel_x", "accel_y", "accel_z", "altitude")
 
@@ -26,7 +26,7 @@ def validate_command(request):
         raise ValueError("Servo command needs axis and angle")
     if not isinstance(request["axis"], str):
         raise ValueError("Axis must be a name")
-    axis = request["axis"].title()
+    axis = next((name for name in AXES if name.casefold() == request["axis"].casefold()), None)
     if axis not in AXES:
         raise ValueError("Unknown axis: " + axis)
     if not is_number(request["angle"]):

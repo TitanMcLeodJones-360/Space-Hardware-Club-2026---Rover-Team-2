@@ -92,6 +92,6 @@ class RoverArm:
 if __name__ == "__main__":
     arm = RoverArm(dry_run=True)
     arm.setup_servos()
-    for command in ("ARM_ENABLE", {"axis": "Base", "angle": 95},
-                    {"axis": "Gripper", "angle": 120}, "STOP_ALL"):
+    for command in ("ARM_ENABLE", {"axis": "Axis1", "angle": 95},
+                    {"axis": "Axis3B", "angle": 120}, "STOP_ALL"):
         print(arm.handle_command(command))

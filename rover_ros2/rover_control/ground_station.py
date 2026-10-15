@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
 )
 
 import pyqtgraph as pg
+from .protocol import AXES
 
 class GroundStation(QMainWindow):
 
@@ -51,8 +52,8 @@ class GroundStation(QMainWindow):
         if self.demo:
             self.preview_status = {
                 "ready": True, "enabled": False, "mode": "simulation",
-                "targets": {axis: 90 for axis in ("Base", "Shoulder", "Elbow", "Wrist", "Gripper")},
-                "limits": {axis: [0, 180] for axis in ("Base", "Shoulder", "Elbow", "Wrist", "Gripper")},
+                "targets": {axis: 90 for axis in AXES},
+                "limits": {axis: [0, 180] for axis in AXES},
                 "motor_ready": True, "motor_speed": 0, "motor_limit": 30,
                 "note": "Local UI preview only",
             }
@@ -112,7 +113,7 @@ class GroundStation(QMainWindow):
     def create_servo_panel(self):
         group = QGroupBox("Arm target angles")
         layout = QGridLayout()
-        for row, axis in enumerate(("Base", "Shoulder", "Elbow", "Wrist", "Gripper")):
+        for row, axis in enumerate(AXES):
             angle = QDoubleSpinBox()
             angle.setRange(0, 180)  # Preview range; real limits come from the Pico.
             angle.setDecimals(1)
@@ -133,10 +134,10 @@ class GroundStation(QMainWindow):
         self.enable_button = QPushButton("Enable arm")
         self.enable_button.setEnabled(False)
         self.enable_button.clicked.connect(lambda: self.send_command("ARM_ENABLE"))
-        layout.addWidget(self.enable_button, 5, 0, 1, 5)
+        layout.addWidget(self.enable_button, len(AXES), 0, 1, 5)
         self.arm_targets = QLabel("Targets: -- (no position feedback)")
         self.arm_targets.setWordWrap(True)
-        layout.addWidget(self.arm_targets, 6, 0, 1, 5)
+        layout.addWidget(self.arm_targets, len(AXES) + 1, 0, 1, 5)
         group.setLayout(layout)
         return group
 

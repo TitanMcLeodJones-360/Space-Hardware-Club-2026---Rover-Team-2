@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>rover_control</name>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
   <description>Rover arm controls and ground station</description>
   <maintainer email="rover@example.invalid">Rover Software Team</maintainer>
   <license>Proprietary</license>
