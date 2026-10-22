@@ -40,7 +40,7 @@ inline bool outputConfigurationValid() {
         if (!USE_SERVOS || !joint.active) continue;
         any_output = true;
         if (!(std::isfinite(joint.min_deg) && std::isfinite(joint.max_deg) &&
-              joint.min_deg >= 0 && joint.min_deg < joint.max_deg && joint.home_deg >= joint.min_deg &&
+              std::isfinite(joint.home_deg) && joint.min_deg < joint.max_deg && joint.home_deg >= joint.min_deg &&
               joint.home_deg <= joint.max_deg && joint.min_pulse_us >= 200 &&
               joint.min_pulse_us < joint.max_pulse_us && joint.max_pulse_us <= 3000)) return false;
     }
@@ -49,6 +49,18 @@ inline bool outputConfigurationValid() {
 
 inline float clampValue(float value, float low, float high) {
     return value < low ? low : (value > high ? high : value);
+}
+
+// Output dry run uses entered angular limits when available; other channels
+// retain the original 0..180 preview range. This does not calibrate PWM.
+inline float jointLow(int i) {
+    return DRY_RUN && !(JOINTS[i].min_deg < JOINTS[i].max_deg) ? 0.0f : JOINTS[i].min_deg;
+}
+inline float jointHigh(int i) {
+    return DRY_RUN && !(JOINTS[i].min_deg < JOINTS[i].max_deg) ? 180.0f : JOINTS[i].max_deg;
+}
+inline float jointHome(int i) {
+    return DRY_RUN && !(JOINTS[i].min_deg < JOINTS[i].max_deg) ? 90.0f : JOINTS[i].home_deg;
 }
 
 // This part doesn't depend on Arduino, so the stop/enable rules can be tested.
@@ -67,7 +79,7 @@ struct ArmState {
         ready = configured;
         motor_ready = motor_configured;
         for (int i = 0; i < JOINT_COUNT; ++i)
-            targets[i] = DRY_RUN ? 90.0f : JOINTS[i].home_deg;
+            targets[i] = jointHome(i);
         note = ready ? "Ready; outputs stopped" : "Finish config.h";
     }
 
@@ -109,8 +121,8 @@ struct ArmState {
             stop("Joint command rejected");
             return false;
         }
-        const float low = DRY_RUN ? 0.0f : JOINTS[joint].min_deg;
-        const float high = DRY_RUN ? 180.0f : JOINTS[joint].max_deg;
+        const float low = jointLow(joint);
+        const float high = jointHigh(joint);
         targets[joint] = clampValue(angle, low, high);
         note = "Joint target updated";
         return true;

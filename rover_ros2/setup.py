@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name="rover_control",
-    version="0.4.0",
+    version="0.5.0",
     packages=["rover_control"],
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/rover_control"]),

@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-// From schematic-draft/two-month-electrical-schematic_5.7z.
+// From the authoritative two-month-electrical-schematic.svg supplied 21 October 2026.
 // GPIO numbers below are NOT physical header pin numbers.
 // Real sensors + SD run by default. Actuator signals stay off in DRY_RUN.
 #ifndef ROVER_DRY_RUN
@@ -32,19 +32,21 @@ struct JointConfig {
 };
 
 // Keep electrical axis names until Mechanical confirms joint mapping.
+// Axis3A angular range is team-reported; centered 0 still needs PWM calibration.
+// Axis3B: reported 120 total / 50 needed; direction/zero still unconfirmed.
 // AXIS_3-1 and AXIS_3-2 may be coupled: do not assume independent joints.
 // Replace -1 calibration values with measured limits before USE_SERVOS=true.
 constexpr JointConfig JOINTS[] = {
     {"Axis1",  true, 15, -1, -1, -1, -1, -1, false}, // M1: AXIS_1_PWM
     {"Axis2",  true, 14, -1, -1, -1, -1, -1, false}, // M2: AXIS_2_PWM
-    {"Axis3A", true, 13, -1, -1, -1, -1, -1, false}, // M3: AXIS_3-1_PWM
+    {"Axis3A", true, 13, -70, 70, 0, -1, -1, false}, // M3: AXIS_3-1_PWM
     {"Axis3B", true, 12, -1, -1, -1, -1, -1, false}, // M4: AXIS_3-2_PWM
 };
 constexpr int JOINT_COUNT = sizeof(JOINTS) / sizeof(JOINTS[0]);
 
 constexpr bool USE_SENSORS = true;
-constexpr int I2C_SDA_PIN = 26; // Physical header pin 31; Wire1 (I2C1).
-constexpr int I2C_SCL_PIN = 27; // Physical header pin 32.
+constexpr int I2C_SDA_PIN = 4; // Physical header pin 6; Wire (I2C0).
+constexpr int I2C_SCL_PIN = 5; // Physical header pin 7.
 constexpr uint8_t BNO055_ADDRESS = 0x28;
 constexpr uint8_t BMP388_ADDRESS = 0x77;
 constexpr float SEA_LEVEL_PRESSURE_HPA = 1013.25f; // Update for test location.
@@ -57,9 +59,9 @@ constexpr int SD_CS_PIN = 17;
 
 // Axis 0 uses TB6612 channel A. No encoder/position feedback is shown.
 constexpr bool USE_DC_MOTOR = true;
-constexpr int MOTOR_IN1_PIN = 4;
-constexpr int MOTOR_IN2_PIN = 3;
-constexpr int MOTOR_PWM_PIN = 2;
+constexpr int MOTOR_IN1_PIN = 8; // Physical header pin 11.
+constexpr int MOTOR_IN2_PIN = 7; // Physical header pin 10.
+constexpr int MOTOR_PWM_PIN = 6; // Physical header pin 9.
 constexpr int MOTOR_STBY_PIN = -1; // Unwired in supplied schematic.
 // Valid for the specified Adafruit TB6612 board's onboard STBY pull-up.
 // For a board without that pull-up, wire STBY and set this false.

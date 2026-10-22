@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
 
 import pyqtgraph as pg
 from .protocol import AXES
+from .arm_config import SIM_HOME, SIM_LIMITS
 
 class GroundStation(QMainWindow):
 
@@ -52,8 +53,8 @@ class GroundStation(QMainWindow):
         if self.demo:
             self.preview_status = {
                 "ready": True, "enabled": False, "mode": "simulation",
-                "targets": {axis: 90 for axis in AXES},
-                "limits": {axis: [0, 180] for axis in AXES},
+                "targets": dict(SIM_HOME),
+                "limits": {axis: list(SIM_LIMITS[axis]) for axis in AXES},
                 "motor_ready": True, "motor_speed": 0, "motor_limit": 30,
                 "note": "Local UI preview only",
             }
@@ -63,6 +64,8 @@ class GroundStation(QMainWindow):
         else:
             from .ground_station_ros import GroundStationROS
             self.ros = GroundStationROS(self.receive_arm_status, self.receive_sensor_data)
+            if self.ros.use_xbox:
+                self.controller_status.setText("Xbox: release buttons, center sticks, then hold RB + Start")
             self.connection.setText("WAITING FOR ARM BRIDGE")
             self.log("ROS 2 started; waiting for arm status. Sensors are not connected.")
             self.ros_timer = QTimer(self)
@@ -84,6 +87,9 @@ class GroundStation(QMainWindow):
         header.addWidget(QLabel("ROS 2:"))
         header.addWidget(self.connection)
         main_layout.addLayout(header)
+        self.controller_status = QLabel("Mouse controls")
+        self.controller_status.setWordWrap(True)
+        main_layout.addWidget(self.controller_status)
         content = QHBoxLayout()
         # Left side
         left_column = QVBoxLayout()
@@ -314,13 +320,14 @@ class GroundStation(QMainWindow):
         self.connection.setText(label + (" / ENABLED" if enabled else " / STOPPED"))
         for button in self.arm_buttons:
             button.setEnabled(ready and enabled)
-        self.enable_button.setEnabled(ready and not enabled)
+        self.enable_button.setEnabled(ready and not enabled and not (self.ros and self.ros.use_xbox))
         for axis, widgets in self.axis_widgets.items():
             for widget in widgets:
-                widget.setEnabled(ready and enabled and axis in status.get("limits", {}))
+                widget.setEnabled(ready and enabled and axis in status.get("limits", {})
+                                  and not (self.ros and self.ros.use_xbox))
         motor_ready = bool(status.get("motor_ready"))
         for widget in self.motor_widgets:
-            widget.setEnabled(ready and enabled and motor_ready)
+            widget.setEnabled(ready and enabled and motor_ready and not (self.ros and self.ros.use_xbox))
         if "motor_limit" in status:
             self.motor_input.setRange(0, abs(status["motor_limit"]))
         self.motor_speed_label.setText(f"Requested speed: {status.get('motor_speed', 0):g}%")
@@ -339,7 +346,7 @@ class GroundStation(QMainWindow):
             if axis in self.angle_inputs and all(isinstance(v, (int, float)) for v in values):
                 self.angle_inputs[axis].setRange(*values)
         for axis, value in targets.items():
-            if axis in self.angle_inputs and axis not in self.target_synced:
+            if axis in self.angle_inputs and (axis not in self.target_synced or (self.ros and self.ros.use_xbox)):
                 self.angle_inputs[axis].setValue(value)
                 self.target_synced.add(axis)
         self.arm_targets.setText("Targets: " + ", ".join(
@@ -352,6 +359,8 @@ class GroundStation(QMainWindow):
 
     def poll_ros(self):
         self.ros.poll()
+        if self.ros.use_xbox:
+            self.controller_status.setText("Xbox: " + self.ros.xbox.note)
         if not self.ros.connected():
             self.connection.setText("NO RECENT ARM STATUS")
             self.target_synced.clear()

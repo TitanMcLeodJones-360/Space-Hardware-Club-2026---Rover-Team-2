@@ -19,14 +19,14 @@ public:
 
     bool begin() {
         if (!USE_SENSORS) return false;
-        if (!Wire1.setSDA(I2C_SDA_PIN) || !Wire1.setSCL(I2C_SCL_PIN)) {
-            error = "Invalid Wire1 I2C1 pin pair";
+        if (!Wire.setSDA(I2C_SDA_PIN) || !Wire.setSCL(I2C_SCL_PIN)) {
+            error = "Invalid Wire I2C0 pin pair";
             return false;
         }
-        Wire1.begin();
-        Wire1.setClock(100000);
+        Wire.begin();
+        Wire.setClock(100000);
         imu_started = bno.begin();
-        bmp_started = bmp.begin_I2C(BMP388_ADDRESS, &Wire1);
+        bmp_started = bmp.begin_I2C(BMP388_ADDRESS, &Wire);
         imu_ready = imu_started;
         bmp_ready = bmp_started;
         if (bmp_started) {
@@ -45,8 +45,8 @@ public:
         bmp_ready = false;
         if (!USE_SENSORS) return result;
         if (imu_started) {
-            Wire1.beginTransmission(BNO055_ADDRESS);
-            if (Wire1.endTransmission() == 0) {
+            Wire.beginTransmission(BNO055_ADDRESS);
+            if (Wire.endTransmission() == 0) {
                 const auto acceleration = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
                 result.accel_x = acceleration.x();
                 result.accel_y = acceleration.y();
@@ -69,7 +69,7 @@ public:
     }
 
 private:
-    Adafruit_BNO055 bno{55, BNO055_ADDRESS, &Wire1};
+    Adafruit_BNO055 bno{55, BNO055_ADDRESS, &Wire};
     Adafruit_BMP3XX bmp;
     bool imu_started = false, bmp_started = false;
 };

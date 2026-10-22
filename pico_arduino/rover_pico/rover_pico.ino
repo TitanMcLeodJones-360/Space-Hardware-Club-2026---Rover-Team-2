@@ -120,8 +120,8 @@ void sendStatus(bool force) {
         const char *name = JOINTS[i].name;
         targets[name] = arm.targets[i];
         JsonArray range = limits[name].to<JsonArray>();
-        range.add(DRY_RUN ? 0.0f : JOINTS[i].min_deg);
-        range.add(DRY_RUN ? 180.0f : JOINTS[i].max_deg);
+        range.add(jointLow(i));
+        range.add(jointHigh(i));
     }
     doc["motor_ready"] = arm.motor_ready;
     doc["motor_speed"] = arm.motor_speed;

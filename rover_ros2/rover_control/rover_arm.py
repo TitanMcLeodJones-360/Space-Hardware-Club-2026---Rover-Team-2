@@ -18,7 +18,7 @@ class RoverArm:
 
     def setup_servos(self):
         if self.dry_run:
-            self.angles = {name: 90 for name in config.JOINTS}
+            self.angles = dict(config.SIM_HOME)
             self.ready = True
             self.last_note = "Simulation ready; no hardware output"
             return self.status()
@@ -28,7 +28,7 @@ class RoverArm:
     def set_angle(self, joint, angle):
         if not self.enabled:
             raise ValueError("Arm stopped; press Enable arm first")
-        low, high = 0, 180
+        low, high = config.SIM_LIMITS[joint]
         target = max(low, min(high, angle))
         self.angles[joint] = target
 
@@ -82,7 +82,7 @@ class RoverArm:
             "ready": self.ready,
             "enabled": self.enabled,
             "targets": dict(self.angles),
-            "limits": {name: [0, 180] for name in config.JOINTS},
+            "limits": {name: list(config.SIM_LIMITS[name]) for name in config.JOINTS},
             "motor_ready": self.dry_run,
             "motor_speed": self.motor_speed,
             "motor_limit": 30,

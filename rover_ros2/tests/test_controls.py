@@ -30,9 +30,9 @@ class ArmTests(unittest.TestCase):
         self.arm.handle_command("ARM_ENABLE")
         for name in ("AXIS1", "AXIS2", "AXIS3A", "AXIS3B"):
             self.arm.handle_command({"axis": name, "angle": 95})
-            self.assertEqual(self.arm.angles[name.title()], 95)
+            self.assertEqual(self.arm.angles[name.title()], 70 if name == "AXIS3A" else 95)
             self.arm.handle_command({"axis": name, "angle": 90})
-            self.assertEqual(self.arm.angles[name.title()], 90)
+            self.assertEqual(self.arm.angles[name.title()], 70 if name == "AXIS3A" else 90)
 
     def test_gripper(self):
         self.arm.handle_command("ARM_ENABLE")
@@ -179,11 +179,14 @@ def fake_ros_modules():
     qos.DurabilityPolicy = types.SimpleNamespace(VOLATILE=1)
     msgs = types.ModuleType("std_msgs.msg")
     msgs.Bool = msgs.Empty = msgs.Float32 = Message
+    sensor_msgs = types.ModuleType("sensor_msgs.msg")
+    sensor_msgs.Joy = Message
     interfaces = types.ModuleType("rover_interfaces.msg")
     for name in ("JointCommand", "ArmStatus", "SensorReadings"):
         setattr(interfaces, name, interface_double(name))
     return {"rclpy": ros, "rclpy.node": node, "rclpy.qos": qos,
             "std_msgs": types.ModuleType("std_msgs"), "std_msgs.msg": msgs,
+            "sensor_msgs": types.ModuleType("sensor_msgs"), "sensor_msgs.msg": sensor_msgs,
             "rover_interfaces": types.ModuleType("rover_interfaces"),
             "rover_interfaces.msg": interfaces}
 

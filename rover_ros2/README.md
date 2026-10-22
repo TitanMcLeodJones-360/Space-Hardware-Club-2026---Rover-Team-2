@@ -9,3 +9,7 @@ The bridge relays JSON lines to Pico over USB serial and publishes custom rover_
 Topics: /arm/joint_command (JointCommand), /arm/motor_command (std_msgs/Float32), /arm/enable (std_msgs/Bool), /arm/stop (std_msgs/Empty), /arm/heartbeat (std_msgs/Bool), /arm/status (ArmStatus), /arm/sensors (SensorReadings).
 
 Run Python tests: `python3 -m unittest discover -s rover_ros2/tests -p 'test_*.py'` from the package root. They use ROS message/node doubles; a ROS installation and hardware are not required for those tests. This does not replace a real colcon build or network/serial/hardware test.
+
+## Wired Xbox controller update
+
+See `../XBOX_SETUP.md`. Launch `ground_station.launch.py xbox:=true xbox_source:=windows` for the Windows helper + mirrored WSL, or `xbox:=true xbox_source:=ros` for a controller directly recognized by native Ubuntu/SDL. The default remains mouse controls. Start enables with neutral sticks and RB held; RB must stay held for movement. B/Back, RB release, stale input, or GUI close stop outputs. One ground station owns both commands and the heartbeat.

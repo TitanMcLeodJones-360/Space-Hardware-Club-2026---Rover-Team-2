@@ -34,6 +34,15 @@ int main() {
     assert(arm.move(0, -10, 102));
     assert(arm.targets[0] == 0);
 
+    const int signed_axis = arm.findJoint("Axis3A");
+    assert(arm.targets[signed_axis] == 0);
+    assert(arm.move(signed_axis, -90, 103));
+    assert(arm.targets[signed_axis] == -70);
+    assert(arm.move(signed_axis, 90, 104));
+    assert(arm.targets[signed_axis] == 70);
+    assert(arm.move(signed_axis, -35, 105));
+    assert(arm.targets[signed_axis] == -35);
+
     assert(arm.motor(100, 110));
     assert(arm.motor_speed == MOTOR_MAX_PERCENT);
     assert(!arm.tick(409));
