@@ -1,3 +1,7 @@
 
 *:Zone.Identifier
 /rover_ros2_backup/
+
+*Zone.Identifier
+
+/firmware/Pico_RP2040_Xbox_Bench.uf2
