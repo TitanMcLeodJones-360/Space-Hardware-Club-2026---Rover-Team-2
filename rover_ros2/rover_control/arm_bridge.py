@@ -14,7 +14,7 @@ from .ros_messages import status_message, sensor_message
 
 class ArmBridge(Node):
     def __init__(self):
-        super().__init__("arm_bridge")
+        super().__init__(node_name="arm_bridge")
         self.declare_parameter("dry_run", True)
         self.declare_parameter("serial_port", "")
         self.declare_parameter("baudrate", 115200)
@@ -148,16 +148,9 @@ class ArmBridge(Node):
                         status_message(status)  # Check before accepting this reply.
                         self.status_data = status
                         self.last_pico_status = time.monotonic()
-                except (ValueError):
-                    self.get_logger().warning("Ignoring invalid Pico reply (Value Error)")
-                except (TypeError):
-                    self.get_logger().warning("Ignoring invalid Pico reply (Type Error")
-                except (UnicodeError):
-                    self.get_logger().warning("Ignoring invalid Pico reply (Unicode Error")
-                except (OverflowError):
-                    self.get_logger().warning("Ignoring invalid Pico reply (Overflow Error")
-                except (AssertionError):
-                    self.get_logger().warning("Ignoring invalid Pico reply (Assertion Error")
+                except (ValueError,TypeError,UnicodeError,OverflowError,AssertionError) as error:
+                    self.get_logger().warning(f"Ignoring invalid Pico reply ({type(error)}): {error}")
+                    print("Invalid reply:", line)
         except Exception as exc:
             self.serial.close()
             self.serial = None
