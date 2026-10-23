@@ -148,8 +148,16 @@ class ArmBridge(Node):
                         status_message(status)  # Check before accepting this reply.
                         self.status_data = status
                         self.last_pico_status = time.monotonic()
-                except (ValueError, TypeError, UnicodeError, OverflowError, AssertionError):
-                    self.get_logger().warning("Ignoring invalid Pico reply")
+                except (ValueError):
+                    self.get_logger().warning("Ignoring invalid Pico reply (Value Error)")
+                except (TypeError):
+                    self.get_logger().warning("Ignoring invalid Pico reply (Type Error")
+                except (UnicodeError):
+                    self.get_logger().warning("Ignoring invalid Pico reply (Unicode Error")
+                except (OverflowError):
+                    self.get_logger().warning("Ignoring invalid Pico reply (Overflow Error")
+                except (AssertionError):
+                    self.get_logger().warning("Ignoring invalid Pico reply (Assertion Error")
         except Exception as exc:
             self.serial.close()
             self.serial = None
