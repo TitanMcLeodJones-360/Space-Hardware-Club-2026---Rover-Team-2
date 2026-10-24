@@ -23,6 +23,8 @@ class ArmBridge(Node):
         self.last_pico_status = None
         self.serial = None
         self.buffer = b""
+        # ROVER_SERIAL_FIX_1
+        self._serial_needs_sync = True
         self.arm = None
         self.status_data = {"ready": False, "enabled": False, "note": "Waiting for Pico"}
         self.publisher = self.create_publisher(ArmStatus, "/arm/status", live_qos())
@@ -48,7 +50,7 @@ class ArmBridge(Node):
             if not port:
                 raise ValueError("Set serial_port for Pico USB serial, UART, or a USB-UART adapter")
             self.serial = serial.Serial(port, self.get_parameter("baudrate").value,
-                                        timeout=0, write_timeout=0.1)
+                                        timeout=0, write_timeout=0.1, exclusive=True)
             self.serial.reset_input_buffer()
             self.write_command("LINK_LOST")
 
@@ -132,10 +134,16 @@ class ArmBridge(Node):
             self.buffer += self.serial.read(min(self.serial.in_waiting, 4096))
             if len(self.buffer) > 8192:
                 self.buffer = b""
+                self._serial_needs_sync = True
                 self.publish_error("Oversized serial reply")
                 return
             while b"\n" in self.buffer:
                 line, self.buffer = self.buffer.split(b"\n", 1)
+                # Opening/resetting USB may leave a partial first line.
+                # Wait for its delimiter; accept complete later lines.
+                if self._serial_needs_sync:
+                    self._serial_needs_sync = False
+                    continue
                 try:
                     status = json.loads(line.decode("utf-8"))
                     if valid_sensor_packet(status):
@@ -148,16 +156,14 @@ class ArmBridge(Node):
                         status_message(status)  # Check before accepting this reply.
                         self.status_data = status
                         self.last_pico_status = time.monotonic()
-                except (ValueError):
-                    self.get_logger().warning("Ignoring invalid Pico reply (Value Error)")
-                except (TypeError):
-                    self.get_logger().warning("Ignoring invalid Pico reply (Type Error")
-                except (UnicodeError):
-                    self.get_logger().warning("Ignoring invalid Pico reply (Unicode Error")
-                except (OverflowError):
-                    self.get_logger().warning("Ignoring invalid Pico reply (Overflow Error")
-                except (AssertionError):
-                    self.get_logger().warning("Ignoring invalid Pico reply (Assertion Error")
+                except json.JSONDecodeError as exc:
+                    self.get_logger().warning(
+                        f"Invalid Pico JSON: {exc}; frame={line[:240]!r}")
+                except (ValueError, TypeError, UnicodeError,
+                        OverflowError, AssertionError) as exc:
+                    self.get_logger().warning(
+                        f"Pico reply rejected [{type(exc).__name__}]: "
+                        f"{exc}; frame={line[:240]!r}")
         except Exception as exc:
             self.serial.close()
             self.serial = None
