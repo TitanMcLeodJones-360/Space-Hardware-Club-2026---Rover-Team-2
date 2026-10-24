@@ -3,16 +3,18 @@
 
 // From the authoritative two-month-electrical-schematic.svg supplied 21 October 2026.
 // GPIO numbers below are NOT physical header pin numbers.
-// Real sensors + SD run by default. Actuator signals stay off in DRY_RUN.
+// Integrated hardware profile: sensors, SD, four servos and TB6612 motor.
+// Outputs stay off until a fresh heartbeat and an explicit ARM_ENABLE.
 #ifndef ROVER_DRY_RUN
-#define ROVER_DRY_RUN 1
+#define ROVER_DRY_RUN 0
 #endif
 #ifndef ROVER_USE_SERVOS
-#define ROVER_USE_SERVOS 0
+#define ROVER_USE_SERVOS 1
 #endif
 constexpr bool DRY_RUN = ROVER_DRY_RUN;
 constexpr bool USE_SERVOS = ROVER_USE_SERVOS;
-constexpr bool SERVO_LAYOUT_CONFIRMED = false;
+// The user authorized the corrected schematic's four channels and assumed zero pose.
+constexpr bool SERVO_LAYOUT_CONFIRMED = true;
 constexpr bool USE_USB_SERIAL = true;
 constexpr int UART_TX_PIN = -1;
 constexpr int UART_RX_PIN = -1;
@@ -21,6 +23,8 @@ constexpr uint32_t HEARTBEAT_TIMEOUT_MS = 1000;
 constexpr uint32_t MOTOR_TIMEOUT_MS = 300;
 constexpr uint32_t SENSOR_INTERVAL_MS = 200;
 constexpr uint32_t LOG_INTERVAL_MS = 1000;
+constexpr uint32_t SERVO_INTERVAL_MS = 20;
+constexpr float SERVO_RATE_DEG_S = 5.0f;
 
 struct JointConfig {
     const char *name;
@@ -31,16 +35,18 @@ struct JointConfig {
     bool reversed;
 };
 
-// Keep electrical axis names until Mechanical confirms joint mapping.
-// Axis3A angular range is team-reported; centered 0 still needs PWM calibration.
-// Axis3B: reported 120 total / 50 needed; direction/zero still unconfirmed.
-// AXIS_3-1 and AXIS_3-2 may be coupled: do not assume independent joints.
-// Replace -1 calibration values with measured limits before USE_SERVOS=true.
+// Provisional zero-centered commissioning limits for the mounted arm.
+// Assumption authorized by the user: all four joints are at 0 degrees.
+// Electrically, 0 maps to 1500 us; +/-10 maps to 1400/1600 us.
+// 10 us/degree is a provisional mapping, not measured joint feedback/calibration.
+// These bounds are NOT verified mechanical travel limits. Expand each joint's
+// limits and pulse mapping only after checking direction, zero and clearance.
+// The earlier Axis3A +/-70 mechanical report does not establish servo PWM endpoints.
 constexpr JointConfig JOINTS[] = {
-    {"Axis1",  true, 15, -1, -1, -1, -1, -1, false}, // M1: AXIS_1_PWM
-    {"Axis2",  true, 14, -1, -1, -1, -1, -1, false}, // M2: AXIS_2_PWM
-    {"Axis3A", true, 13, -70, 70, 0, -1, -1, false}, // M3: AXIS_3-1_PWM
-    {"Axis3B", true, 12, -1, -1, -1, -1, -1, false}, // M4: AXIS_3-2_PWM
+    {"Axis1",  true, 15, -10, 10, 0, 1400, 1600, false}, // M1: AXIS_1_PWM
+    {"Axis2",  true, 14, -10, 10, 0, 1400, 1600, false}, // M2: AXIS_2_PWM
+    {"Axis3A", true, 13, -10, 10, 0, 1400, 1600, false}, // M3: AXIS_3-1_PWM
+    {"Axis3B", true, 12, -10, 10, 0, 1400, 1600, false}, // M4: AXIS_3-2_PWM
 };
 constexpr int JOINT_COUNT = sizeof(JOINTS) / sizeof(JOINTS[0]);
 

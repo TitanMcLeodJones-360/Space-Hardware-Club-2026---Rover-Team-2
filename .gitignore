@@ -5,3 +5,12 @@
 *Zone.Identifier
 
 /firmware/Pico_RP2040_Xbox_Bench.uf2
+__pycache__/
+*.py[cod]
+/build/
+/install/
+/log/
+*Zone.Identifier*
+*.py.before_diagnostics
+.venv/
+.vscode/

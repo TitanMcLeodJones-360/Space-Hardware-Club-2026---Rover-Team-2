@@ -63,6 +63,10 @@ def main():
                         complete_samples += 1
     checks = {
         'status_received': status_seen,
+        'hardware_mode': last_status.get('mode') == 'hardware',
+        'four_servo_channels': set(last_status.get('limits', {})) ==
+                               {'Axis1', 'Axis2', 'Axis3A', 'Axis3B'},
+        'outputs_configured': last_status.get('ready') is True,
         'imu_ready': last_status.get('imu_ready') is True,
         'bmp_ready': last_status.get('bmp_ready') is True,
         'sd_ready': last_status.get('sd_ready') is True,
@@ -71,7 +75,8 @@ def main():
         'sd_rows_increased': first_rows is not None and last_rows > first_rows,
     }
     print('CHECKS', json.dumps(checks))
-    passed = (all(checks[k] for k in ('status_received', 'imu_ready', 'bmp_ready',
+    passed = (all(checks[k] for k in ('status_received', 'hardware_mode', 'four_servo_channels',
+                                     'outputs_configured', 'imu_ready', 'bmp_ready',
                                      'sd_ready', 'sd_rows_increased'))
               and complete_samples > 0)
     print('PASS' if passed else 'FAIL: inspect wiring, address, card, and received frames')

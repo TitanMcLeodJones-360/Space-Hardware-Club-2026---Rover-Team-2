@@ -21,54 +21,54 @@ class ArmTests(unittest.TestCase):
         self.arm.setup_servos()
 
     def test_starts_stopped(self):
-        status = self.arm.handle_command({"axis": "Axis1", "angle": 95})
+        status = self.arm.handle_command({"axis": "Axis1", "angle": 5})
         self.assertFalse(status["enabled"])
-        self.assertEqual(status["targets"]["Axis1"], 90)
+        self.assertEqual(status["targets"]["Axis1"], 0)
         self.assertIn("error", status)
 
     def test_joint_commands(self):
         self.arm.handle_command("ARM_ENABLE")
         for name in ("AXIS1", "AXIS2", "AXIS3A", "AXIS3B"):
-            self.arm.handle_command({"axis": name, "angle": 95})
-            self.assertEqual(self.arm.angles[name.title()], 70 if name == "AXIS3A" else 95)
-            self.arm.handle_command({"axis": name, "angle": 90})
-            self.assertEqual(self.arm.angles[name.title()], 70 if name == "AXIS3A" else 90)
+            self.arm.handle_command({"axis": name, "angle": 5})
+            self.assertEqual(self.arm.angles[name.title()], 5)
+            self.arm.handle_command({"axis": name, "angle": 0})
+            self.assertEqual(self.arm.angles[name.title()], 0)
 
-    def test_gripper(self):
+    def test_axis3b_signed_targets(self):
         self.arm.handle_command("ARM_ENABLE")
-        self.arm.handle_command({"axis": "Axis3B", "angle": 120})
-        self.assertEqual(self.arm.angles["Axis3B"], 120)
-        self.arm.handle_command({"axis": "Axis3B", "angle": 60})
-        self.assertEqual(self.arm.angles["Axis3B"], 60)
+        self.arm.handle_command({"axis": "Axis3B", "angle": 3})
+        self.assertEqual(self.arm.angles["Axis3B"], 3)
+        self.arm.handle_command({"axis": "Axis3B", "angle": -3})
+        self.assertEqual(self.arm.angles["Axis3B"], -3)
 
     def test_preview_limits(self):
         self.arm.handle_command("ARM_ENABLE")
         self.arm.handle_command({"axis": "Axis1", "angle": 300})
-        self.assertEqual(self.arm.angles["Axis1"], 180)
+        self.assertEqual(self.arm.angles["Axis1"], 10)
         self.arm.handle_command({"axis": "Axis1", "angle": -30})
-        self.assertEqual(self.arm.angles["Axis1"], 0)
+        self.assertEqual(self.arm.angles["Axis1"], -10)
 
     def test_duplicate_angle_is_idempotent(self):
         self.arm.handle_command("ARM_ENABLE")
         for _ in range(4):
-            self.arm.handle_command({"axis": "Axis1", "angle": 95})
-        self.assertEqual(self.arm.angles["Axis1"], 95)
+            self.arm.handle_command({"axis": "Axis1", "angle": 5})
+        self.assertEqual(self.arm.angles["Axis1"], 5)
 
     def test_invalid_angle_rejected(self):
-        for value in (True, float("nan"), float("inf"), "95"):
+        for value in (True, float("nan"), float("inf"), "5"):
             self.assertIn("error", self.arm.handle_command({"axis": "Axis1", "angle": value}))
 
     def test_stop_requires_enable(self):
         self.arm.handle_command("ARM_ENABLE")
-        self.arm.handle_command({"axis": "Axis1", "angle": 95})
+        self.arm.handle_command({"axis": "Axis1", "angle": 5})
         self.arm.handle_command("STOP_ALL")
-        self.arm.handle_command({"axis": "Axis1", "angle": 100})
-        self.assertEqual(self.arm.angles["Axis1"], 95)
+        self.arm.handle_command({"axis": "Axis1", "angle": 8})
+        self.assertEqual(self.arm.angles["Axis1"], 5)
         self.arm.handle_command("HEARTBEAT")
         self.assertFalse(self.arm.enabled)
         self.arm.handle_command("ARM_ENABLE")
-        self.arm.handle_command({"axis": "Axis1", "angle": 100})
-        self.assertEqual(self.arm.angles["Axis1"], 100)
+        self.arm.handle_command({"axis": "Axis1", "angle": 8})
+        self.assertEqual(self.arm.angles["Axis1"], 8)
 
     def test_link_loss(self):
         self.arm.handle_command("ARM_ENABLE")
@@ -179,14 +179,11 @@ def fake_ros_modules():
     qos.DurabilityPolicy = types.SimpleNamespace(VOLATILE=1)
     msgs = types.ModuleType("std_msgs.msg")
     msgs.Bool = msgs.Empty = msgs.Float32 = Message
-    sensor_msgs = types.ModuleType("sensor_msgs.msg")
-    sensor_msgs.Joy = Message
     interfaces = types.ModuleType("rover_interfaces.msg")
     for name in ("JointCommand", "ArmStatus", "SensorReadings"):
         setattr(interfaces, name, interface_double(name))
     return {"rclpy": ros, "rclpy.node": node, "rclpy.qos": qos,
             "std_msgs": types.ModuleType("std_msgs"), "std_msgs.msg": msgs,
-            "sensor_msgs": types.ModuleType("sensor_msgs"), "sensor_msgs.msg": sensor_msgs,
             "rover_interfaces": types.ModuleType("rover_interfaces"),
             "rover_interfaces.msg": interfaces}
 
@@ -240,7 +237,7 @@ class BridgeTests(unittest.TestCase):
         msg.data = data
         return msg
 
-    def joint(self, angle=95):
+    def joint(self, angle=5):
         return types.SimpleNamespace(joint="Axis1", angle_deg=angle)
 
     def start_arm(self):
@@ -263,13 +260,13 @@ class BridgeTests(unittest.TestCase):
         self.bridge.receive_heartbeat(gui.heartbeat.messages[-1])
         gui.send_command("ARM_ENABLE")
         self.bridge.receive_enable(gui.enable_publisher.messages[-1])
-        gui.send_command({"axis": "Axis1", "angle": 95})
+        gui.send_command({"axis": "Axis1", "angle": 5})
         joint = gui.joint_publisher.messages[-1]
-        self.assertEqual((joint.joint, joint.angle_deg), ("Axis1", 95.0))
+        self.assertEqual((joint.joint, joint.angle_deg), ("Axis1", 5.0))
         self.bridge.receive_joint(joint)
         self.bridge.publish_status()
         gui.receive_status(self.bridge.publisher.messages[-1])
-        self.assertEqual(statuses[-1]["targets"]["Axis1"], 95)
+        self.assertEqual(statuses[-1]["targets"]["Axis1"], 5)
         self.assertEqual(statuses[-1]["bridge_mode"], "simulation")
 
     def test_bridge_rejects_enable_without_heartbeat(self):
@@ -337,7 +334,7 @@ class BridgeTests(unittest.TestCase):
         gui.receive_status(self.bridge.publisher.messages[-1])
         self.now += 2
         with self.assertRaises(ValueError):
-            gui.send_command({"axis": "Axis1", "angle": 95})
+            gui.send_command({"axis": "Axis1", "angle": 5})
         gui.send_command("STOP_ALL")
         self.assertEqual(len(gui.stop_publisher.messages), 1)
 
@@ -406,7 +403,7 @@ class BridgeTests(unittest.TestCase):
         serial.incoming = b'{"mode":"simulation","ready":true,"enabled":false}\n'
         bridge.poll()
         bridge.receive_joint(self.joint())
-        self.assertEqual(json.loads(serial.writes[-1]), {"axis": "Axis1", "angle": 95})
+        self.assertEqual(json.loads(serial.writes[-1]), {"axis": "Axis1", "angle": 5})
         bridge.receive_motor(self.message(-15.0))
         self.assertEqual(json.loads(serial.writes[-1]), {"motor": "DC", "speed": -15})
 
@@ -439,11 +436,11 @@ class GUIActionTests(unittest.TestCase):
         window.demo = False
         window.log = Mock()
         window.ros = types.SimpleNamespace(send_command=Mock())
-        target = [90]
+        target = [0]
         window.angle_inputs = {"Axis1": types.SimpleNamespace(
             value=lambda: target[0], setValue=lambda value: target.__setitem__(0, value))}
         window.change_target("Axis1", 5)
-        window.ros.send_command.assert_called_once_with({"axis": "Axis1", "angle": 95})
+        window.ros.send_command.assert_called_once_with({"axis": "Axis1", "angle": 5})
 
     def test_held_motor_sends_refresh_and_release_sends_zero(self):
         window = self.gui_module.GroundStation.__new__(self.gui_module.GroundStation)

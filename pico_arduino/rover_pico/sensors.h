@@ -25,6 +25,7 @@ public:
         }
         Wire.begin();
         Wire.setClock(100000);
+        Wire.setTimeout(25, true);
         imu_started = bno.begin();
         bmp_started = bmp.begin_I2C(BMP388_ADDRESS, &Wire);
         imu_ready = imu_started;

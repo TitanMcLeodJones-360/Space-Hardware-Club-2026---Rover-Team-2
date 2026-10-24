@@ -64,10 +64,8 @@ class GroundStation(QMainWindow):
         else:
             from .ground_station_ros import GroundStationROS
             self.ros = GroundStationROS(self.receive_arm_status, self.receive_sensor_data)
-            if self.ros.use_xbox:
-                self.controller_status.setText("Xbox: release buttons, center sticks, then hold RB + Start")
             self.connection.setText("WAITING FOR ARM BRIDGE")
-            self.log("ROS 2 started; waiting for arm status. Sensors are not connected.")
+            self.log("ROS 2 started; waiting for Pico status and live sensor data.")
             self.ros_timer = QTimer(self)
             self.ros_timer.timeout.connect(self.poll_ros)
             self.ros_timer.start(20)
@@ -87,9 +85,9 @@ class GroundStation(QMainWindow):
         header.addWidget(QLabel("ROS 2:"))
         header.addWidget(self.connection)
         main_layout.addLayout(header)
-        self.controller_status = QLabel("Mouse controls")
-        self.controller_status.setWordWrap(True)
-        main_layout.addWidget(self.controller_status)
+        self.control_hint = QLabel("Enable the arm, then set a target angle or use the ± buttons.")
+        self.control_hint.setWordWrap(True)
+        main_layout.addWidget(self.control_hint)
         content = QHBoxLayout()
         # Left side
         left_column = QVBoxLayout()
@@ -121,15 +119,17 @@ class GroundStation(QMainWindow):
         layout = QGridLayout()
         for row, axis in enumerate(AXES):
             angle = QDoubleSpinBox()
-            angle.setRange(0, 180)  # Preview range; real limits come from the Pico.
+            angle.setRange(*SIM_LIMITS[axis])  # Pico status supplies hardware limits.
+            angle.setValue(SIM_HOME[axis])
+            angle.setSingleStep(1.0)
             angle.setDecimals(1)
             angle.setSuffix("°")
             self.angle_inputs[axis] = angle
             minus = QPushButton("-")
             plus = QPushButton("+")
             send = QPushButton("Set")
-            minus.clicked.connect(lambda checked, axis=axis: self.change_target(axis, -5))
-            plus.clicked.connect(lambda checked, axis=axis: self.change_target(axis, 5))
+            minus.clicked.connect(lambda checked, axis=axis: self.change_target(axis, -1))
+            plus.clicked.connect(lambda checked, axis=axis: self.change_target(axis, 1))
             send.clicked.connect(lambda checked, axis=axis: self.send_angle(axis))
             self.axis_widgets[axis] = [angle, minus, plus, send]
             self.arm_buttons.extend(self.axis_widgets[axis])
@@ -305,9 +305,12 @@ class GroundStation(QMainWindow):
         self.update_sensors(packet["data"], packet["mode"])
 
     def receive_arm_status(self, status):
+        was_enabled = bool((self.last_arm_status or {}).get("enabled"))
         self.last_arm_status = status
         ready = bool(status.get("ready"))
         enabled = bool(status.get("enabled"))
+        if was_enabled and not enabled:
+            self.target_synced.clear()
         mode = status.get("mode", "unknown")
         if self.demo:
             label = "LOCAL DEMO"
@@ -320,14 +323,13 @@ class GroundStation(QMainWindow):
         self.connection.setText(label + (" / ENABLED" if enabled else " / STOPPED"))
         for button in self.arm_buttons:
             button.setEnabled(ready and enabled)
-        self.enable_button.setEnabled(ready and not enabled and not (self.ros and self.ros.use_xbox))
+        self.enable_button.setEnabled(ready and not enabled)
         for axis, widgets in self.axis_widgets.items():
             for widget in widgets:
-                widget.setEnabled(ready and enabled and axis in status.get("limits", {})
-                                  and not (self.ros and self.ros.use_xbox))
+                widget.setEnabled(ready and enabled and axis in status.get("limits", {}))
         motor_ready = bool(status.get("motor_ready"))
         for widget in self.motor_widgets:
-            widget.setEnabled(ready and enabled and motor_ready and not (self.ros and self.ros.use_xbox))
+            widget.setEnabled(ready and enabled and motor_ready)
         if "motor_limit" in status:
             self.motor_input.setRange(0, abs(status["motor_limit"]))
         self.motor_speed_label.setText(f"Requested speed: {status.get('motor_speed', 0):g}%")
@@ -346,7 +348,7 @@ class GroundStation(QMainWindow):
             if axis in self.angle_inputs and all(isinstance(v, (int, float)) for v in values):
                 self.angle_inputs[axis].setRange(*values)
         for axis, value in targets.items():
-            if axis in self.angle_inputs and (axis not in self.target_synced or (self.ros and self.ros.use_xbox)):
+            if axis in self.angle_inputs and axis not in self.target_synced:
                 self.angle_inputs[axis].setValue(value)
                 self.target_synced.add(axis)
         self.arm_targets.setText("Targets: " + ", ".join(
@@ -359,8 +361,6 @@ class GroundStation(QMainWindow):
 
     def poll_ros(self):
         self.ros.poll()
-        if self.ros.use_xbox:
-            self.controller_status.setText("Xbox: " + self.ros.xbox.note)
         if not self.ros.connected():
             self.connection.setText("NO RECENT ARM STATUS")
             self.target_synced.clear()

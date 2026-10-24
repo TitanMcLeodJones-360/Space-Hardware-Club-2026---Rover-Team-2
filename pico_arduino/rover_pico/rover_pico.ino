@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Servo.h>
+#include <hardware/watchdog.h>
 #include "config.h"
 #include "control.h"
 #include "sensors.h"
@@ -14,7 +15,7 @@ SensorData readings;
 bool pins_ok = false;
 bool motor_pins_ready = false;
 bool uart_started = false;
-uint32_t started, last_sensor, last_log, last_status;
+uint32_t started, last_sensor, last_log, last_status, last_servo;
 char command_buffer[512];
 size_t command_length = 0;
 bool discard_line = false;
@@ -62,7 +63,13 @@ void applyMotor() {
 }
 
 void stopOutputs() {
-    for (auto &servo : servos) if (servo.attached()) servo.detach();
+    for (int i = 0; i < JOINT_COUNT; ++i) {
+        if (servos[i].attached()) servos[i].detach();
+        if (!DRY_RUN && USE_SERVOS && pins_ok && JOINTS[i].active) {
+            pinMode(JOINTS[i].pin, OUTPUT);
+            digitalWrite(JOINTS[i].pin, LOW);
+        }
+    }
     applyMotor();
 }
 
@@ -73,7 +80,7 @@ void stopAll(const char *reason) {
 
 int servoPulse(int index) {
     const auto &joint = JOINTS[index];
-    float fraction = (arm.targets[index] - joint.min_deg) / (joint.max_deg - joint.min_deg);
+    float fraction = (arm.commanded[index] - joint.min_deg) / (joint.max_deg - joint.min_deg);
     if (joint.reversed) fraction = 1.0f - fraction;
     return int(joint.min_pulse_us + fraction *
                (joint.max_pulse_us - joint.min_pulse_us));
@@ -108,6 +115,7 @@ void sendStatus(bool force) {
     last_status = now;
     JsonDocument doc;
     doc["type"] = "status";
+    doc["firmware"] = "rover-integrated-0.6.0";
     doc["mode"] = DRY_RUN ? "simulation" : "hardware";
     doc["ready"] = arm.ready;
     doc["enabled"] = arm.enabled;
@@ -180,8 +188,7 @@ void handleCommand(const char *line) {
             if (arm.enable(now)) attachServos();
         } else if (std::strcmp(command, "STATUS") != 0) stopAll("Unknown control command");
     } else if (doc.size() == 2 && doc["axis"].is<const char *>() && numeric(doc["angle"])) {
-        if (arm.move(arm.findJoint(doc["axis"].as<const char *>()), doc["angle"].as<float>(), now))
-            applyServo(arm.findJoint(doc["axis"].as<const char *>()));
+        arm.move(arm.findJoint(doc["axis"].as<const char *>()), doc["angle"].as<float>(), now);
     } else if (doc.size() == 2 && doc["motor"].is<const char *>() &&
                std::strcmp(doc["motor"].as<const char *>(), "DC") == 0 && numeric(doc["speed"])) {
         arm.motor(doc["speed"].as<float>(), now);
@@ -230,15 +237,24 @@ void setup() {
     const bool outputs_ready = configureOutputs();
     arm.initialize(outputs_ready, outputs_ready && (DRY_RUN || USE_DC_MOTOR));
     if (!outputs_ready && !*setup_error) setup_error = "Finish servo and motor settings in config.h";
+    stopOutputs();
+    started = last_sensor = last_log = last_status = last_servo = millis();
+    sendStatus(true);
+    // Outputs are disabled throughout initialization. Recover if a peripheral hangs.
+    watchdog_enable(8000, true);
     if (pins_ok) {
         sensors.begin();
+        watchdog_update();
         logger.begin();
     }
-    started = last_sensor = last_log = last_status = millis();
+    watchdog_enable(2000, true);
+    last_sensor = last_log = last_status = last_servo = millis();
     sendStatus(true);
 }
 
 void loop() {
+    watchdog_update();
+    if (USE_USB_SERIAL && !Serial && arm.enabled) stopAll("USB disconnected");
     if (arm.tick(millis())) {
         if (!arm.enabled) stopOutputs();
         else applyMotor();
@@ -246,6 +262,12 @@ void loop() {
     }
     readCommands();
     const uint32_t now = millis();
+    if (uint32_t(now - last_servo) >= SERVO_INTERVAL_MS) {
+        const uint32_t elapsed = now - last_servo;
+        last_servo = now;
+        if (arm.stepServos(elapsed))
+            for (int i = 0; i < JOINT_COUNT; ++i) applyServo(i);
+    }
     if (pins_ok && USE_SENSORS && uint32_t(now - last_sensor) >= SENSOR_INTERVAL_MS) {
         last_sensor = now;
         readings = sensors.read();

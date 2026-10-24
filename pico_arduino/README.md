@@ -1,11 +1,16 @@
-# Pico firmware
+# Integrated Pico firmware
 
-Open `rover_pico/rover_pico.ino`. Keep its five files together.
+Use `firmware/Pico_RP2040_Integrated.uf2` from the repository root on a standard
+RP2040 Pico. Source: `rover_pico/`; the copy under `rover_ros2/pico/rover_pico` is
+identical. Sensors, SD logging, four servos and the TB6612 DC motor run together.
+Outputs start disabled and require the GUI's Enable arm command plus heartbeats.
 
-Read the package's top-level README.md for the pin table, upload/install instructions, bench test, and remaining mechanical calibration. The hardware wiring comes from the standalone two-month-electrical-schematic.svg supplied on 21 October 2026.
+All four startup targets are 0 degrees, mapped provisionally to 1500 us. Initial
+software travel is +/-10 degrees (1400..1600 us), with 5 degree/second ramping after
+enable. Actual joint zero/direction/travel still require hardware verification;
+these values are not measured feedback. First enable can reposition the arm if
+its mechanical zero does not match electrical center.
 
-Defaults read real BNO055/BMP388 sensors on Wire (I2C0) GP4/5 and log to SPI0 SD on GP16/17/18/19. DRY_RUN prevents all actuator signals. The four servo channel labels match the schematic, and their motion stays disabled pending mechanical layout and measured calibration.
-
-This is Arduino C++ for Earle Philhower's Pico core, not MicroPython or Arduino Mbed. The duplicate firmware under rover_ros2/pico/rover_pico is identical to this copy. Update both copies if making later source changes.
-
-Axis3A now uses the team-reported signed range -70..+70 degrees with angular zero 0. PWM endpoints remain unset. Axis3B's 50-degree operating direction and all outstanding servo calibration/layout settings still need confirmation. This update does not enable physical servo output. See ../XBOX_SETUP.md.
+See [the installation guide](../README.md) for the pin table, flashing, Orange Pi
+setup, laptop GUI, logging checks, and stop behavior. Rebuild with
+`bash tools/build_pico.sh` from the repository root after updating calibration.

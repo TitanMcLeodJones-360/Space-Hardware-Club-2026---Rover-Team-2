@@ -34,6 +34,8 @@ inline bool outputConfigurationValid() {
     if (DRY_RUN) return true;
     bool any_output = USE_DC_MOTOR;
     if (USE_SERVOS && !SERVO_LAYOUT_CONFIRMED) return false;
+    if (USE_SERVOS && (!std::isfinite(SERVO_RATE_DEG_S) || SERVO_RATE_DEG_S <= 0 ||
+                       SERVO_INTERVAL_MS == 0)) return false;
     if (MOTOR_DIRECTION != 1 && MOTOR_DIRECTION != -1) return false;
     if (USE_DC_MOTOR && (MOTOR_MAX_PERCENT <= 0 || MOTOR_MAX_PERCENT > 100)) return false;
     for (const auto &joint : JOINTS) {
@@ -51,8 +53,7 @@ inline float clampValue(float value, float low, float high) {
     return value < low ? low : (value > high ? high : value);
 }
 
-// Output dry run uses entered angular limits when available; other channels
-// retain the original 0..180 preview range. This does not calibrate PWM.
+// Dry run uses the same zero-centered limits as the integrated hardware profile.
 inline float jointLow(int i) {
     return DRY_RUN && !(JOINTS[i].min_deg < JOINTS[i].max_deg) ? 0.0f : JOINTS[i].min_deg;
 }
@@ -72,6 +73,7 @@ struct ArmState {
     uint32_t last_heartbeat = 0;
     uint32_t last_motor_command = 0;
     float targets[JOINT_COUNT] = {};
+    float commanded[JOINT_COUNT] = {}; // Pulse command estimate, not measured position.
     float motor_speed = 0;
     const char *note = "Not configured";
 
@@ -79,7 +81,7 @@ struct ArmState {
         ready = configured;
         motor_ready = motor_configured;
         for (int i = 0; i < JOINT_COUNT; ++i)
-            targets[i] = jointHome(i);
+            commanded[i] = targets[i] = jointHome(i);
         note = ready ? "Ready; outputs stopped" : "Finish config.h";
     }
 
@@ -90,7 +92,25 @@ struct ArmState {
     void stop(const char *reason) {
         enabled = false;
         motor_speed = 0;
+        // Freeze pending ramps. Re-enable resumes the last pulse command rather
+        // than advancing toward a target queued before the stop.
+        for (int i = 0; i < JOINT_COUNT; ++i) targets[i] = commanded[i];
         note = reason;
+    }
+
+    bool stepServos(uint32_t elapsed_ms) {
+        if (!enabled) return false;
+        // Never catch up with a large jump after a slow SD/sensor operation.
+        const float step = SERVO_RATE_DEG_S *
+            (elapsed_ms < SERVO_INTERVAL_MS ? elapsed_ms : SERVO_INTERVAL_MS) / 1000.0f;
+        bool changed = false;
+        for (int i = 0; i < JOINT_COUNT; ++i) {
+            const float delta = targets[i] - commanded[i];
+            if (delta == 0) continue;
+            commanded[i] += clampValue(delta, -step, step);
+            changed = true;
+        }
+        return changed;
     }
 
     void heartbeat(uint32_t now) {

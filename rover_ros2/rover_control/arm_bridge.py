@@ -1,4 +1,5 @@
 import json
+import os
 import time
 
 import rclpy
@@ -10,6 +11,7 @@ from .ground_station_ros import live_qos
 from .rover_arm import RoverArm
 from .protocol import validate_command, valid_sensor_packet
 from .ros_messages import status_message, sensor_message
+from .serial_framing import LineBuffer
 
 
 class ArmBridge(Node):
@@ -22,9 +24,9 @@ class ArmBridge(Node):
         self.last_heartbeat = None
         self.last_pico_status = None
         self.serial = None
-        self.buffer = b""
-        # ROVER_SERIAL_FIX_1
-        self._serial_needs_sync = True
+        # ROVER_SERIAL_FIX_2: retain partial reads, including a valid first reply.
+        self.rx_lines = LineBuffer()
+        self.first_serial_line = True
         self.arm = None
         self.status_data = {"ready": False, "enabled": False, "note": "Waiting for Pico"}
         self.publisher = self.create_publisher(ArmStatus, "/arm/status", live_qos())
@@ -52,6 +54,8 @@ class ArmBridge(Node):
             self.serial = serial.Serial(port, self.get_parameter("baudrate").value,
                                         timeout=0, write_timeout=0.1, exclusive=True)
             self.serial.reset_input_buffer()
+            self.get_logger().info(
+                f"Pico serial framing v2; port={port}; pid={os.getpid()}; module={__file__}")
             self.write_command("LINK_LOST")
 
         self.poll_timer = self.create_timer(0.02, self.poll)
@@ -131,19 +135,15 @@ class ArmBridge(Node):
         if self.serial is None:
             return
         try:
-            self.buffer += self.serial.read(min(self.serial.in_waiting, 4096))
-            if len(self.buffer) > 8192:
-                self.buffer = b""
-                self._serial_needs_sync = True
-                self.publish_error("Oversized serial reply")
-                return
-            while b"\n" in self.buffer:
-                line, self.buffer = self.buffer.split(b"\n", 1)
-                # Opening/resetting USB may leave a partial first line.
-                # Wait for its delimiter; accept complete later lines.
-                if self._serial_needs_sync:
-                    self._serial_needs_sync = False
-                    continue
+            previous_drops = self.rx_lines.dropped_lines
+            frames = self.rx_lines.feed(
+                self.serial.read(min(self.serial.in_waiting, 4096)))
+            if self.rx_lines.dropped_lines != previous_drops:
+                self.publish_error("Oversized Pico line discarded; waiting for newline")
+                self.get_logger().warning("Oversized Pico line discarded; waiting for newline")
+            for line in frames:
+                first_line = self.first_serial_line
+                self.first_serial_line = False
                 try:
                     status = json.loads(line.decode("utf-8"))
                     if valid_sensor_packet(status):
@@ -157,8 +157,12 @@ class ArmBridge(Node):
                         self.status_data = status
                         self.last_pico_status = time.monotonic()
                 except json.JSONDecodeError as exc:
-                    self.get_logger().warning(
-                        f"Invalid Pico JSON: {exc}; frame={line[:240]!r}")
+                    detail = (f"{exc}; bytes={len(line)}; "
+                              f"head={line[:160]!r}; tail={line[-80:]!r}")
+                    if first_line:
+                        self.get_logger().info("Discarded invalid startup Pico line: " + detail)
+                    else:
+                        self.get_logger().warning("Invalid Pico JSON: " + detail)
                 except (ValueError, TypeError, UnicodeError,
                         OverflowError, AssertionError) as exc:
                     self.get_logger().warning(
